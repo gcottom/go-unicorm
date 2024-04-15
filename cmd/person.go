@@ -61,7 +61,8 @@ func (p *PersonTable) GetByFirstName(name string) Person {
 	return r[0]
 }
 
-func (p *PersonTable) Save(person Person) error {
+func (p *PersonTable) Save(person any) error {
+	fmt.Println(person)
 	_, err := p.AutoGenerate(person)
 	return err
 }

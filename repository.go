@@ -2,7 +2,6 @@ package unicorm
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"reflect"
 	"runtime"
@@ -11,21 +10,27 @@ import (
 	"github.com/lodmev/scanstruct"
 )
 
-type Table[T any] struct {
-	TableName  string
-	RepoStruct T
-	DBClient   *sql.DB
-}
-
 func InitTable[T, V any](superTable *T, entity V, db *sql.DB) {
 	tableName := strings.ToLower(reflect.TypeOf(entity).Name())
 	table := new(Table[V])
 	table.TableName = tableName
 	table.RepoStruct = entity
 	table.DBClient = db
-
+	table.structInfo = getFieldInfo(entity)
 	reflect.ValueOf(superTable).Elem().FieldByName("Table").Set(reflect.ValueOf(table))
 	setUpTable(table)
+}
+
+func getFieldInfo[T any](strct T) []structInfo {
+	fieldList := make([]structInfo, 0)
+	for i := 0; i < reflect.ValueOf(strct).NumField(); i++ {
+		info := structInfo{
+			FieldName: scanstruct.ToSnakeCase(reflect.ValueOf(strct).Type().Field(i).Name),
+			FieldType: reflect.ValueOf(strct).Field(i).Type().Name(),
+		}
+		fieldList = append(fieldList, info)
+	}
+	return fieldList
 }
 
 func setUpTable[T any](table *Table[T]) {
@@ -56,6 +61,7 @@ func checkCreateDBTable[T any](table *Table[T]) {
 	createStatement := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (%s);", table.TableName, strings.Join(vals, ", "))
 	table.DBClient.Exec(createStatement)
 }
+
 func checkDBColumnsExist[T any](table *Table[T]) {
 	checkTableColExists := `SELECT COUNT(*) FROM pragma_table_info(?) WHERE name=?`
 	var colExists bool
@@ -98,31 +104,15 @@ func (repo *Table[T]) AutoGenerate(val ...any) ([]T, error) {
 	name := runtime.FuncForPC(c).Name()
 	sp := strings.Split(name, ".")
 	function := sp[len(sp)-1]
-	fmt.Println(function)
-	//isQ, _ := isCreateQuery(function, "query")
-	isQ := true
-	if isQ {
-		_, q, err := Parse(function, repo.TableName, repo.RepoStruct)
-		if err != nil {
-			panic(err)
-		}
-		fmt.Println(q)
-		return ExecuteQuery[T](q, repo, val)
-	} else {
-		isC, _ := isCreateQuery(function, "create")
-		if isC {
-			var args []any
-			if reflect.TypeOf(val[0]) == reflect.TypeOf(repo.RepoStruct) {
-				for i := 0; i < reflect.ValueOf(val[0]).NumField(); i++ {
-					args = append(args, reflect.ValueOf(val[0]).Field(i).Interface())
-				}
-			}
-
-			s, _ := NewStatementBuilder().Insert().Into(repo.TableName).Values(args).Execute()
-			return ExecuteStatement(s, repo, args)
-		}
+	functiontype, q, args, err := Parse(function, repo, val...)
+	if err != nil {
+		panic(err)
 	}
-	return nil, errors.New("couldn't generate a query")
+	fmt.Println(functiontype, q)
+	if functiontype == QUERY {
+		return ExecuteQuery(q, repo, val)
+	}
+	return ExecuteStatement(q, repo, args)
 }
 
 func ExecuteStatement[T any](statement string, r *Table[T], args []any) ([]T, error) {

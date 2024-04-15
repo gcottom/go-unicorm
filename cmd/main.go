@@ -1,12 +1,11 @@
 package main
 
-import (
-	"fmt"
-)
+import "fmt"
 
 func main() {
 	c := CreateClient()
-	fmt.Println(c.PersonTable.GetByFirstName("Lori"))
-	//fmt.Println(c.PersonTable.GetAll())
+	p := Person{ID: "1", FirstName: "Gage", LastName: "Clockjaw", Age: 29, Children: 0}
+	c.PersonTable.Save(p)
+	fmt.Println(c.PersonTable.GetAll())
 
 }
