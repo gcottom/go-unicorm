@@ -96,7 +96,7 @@ func statementParse[T any](parts []string, fieldList []string, table *Table[T], 
 							r.Scan(&exists)
 						}
 						if exists {
-							stmt, args := NewStatementBuilder().Update(table.TableName).Set(true, w).Where(NewConditional("id", reflect.ValueOf(w).Field(0).Interface(), "=")).Execute()
+							stmt, args := NewStatementBuilder().Update(table.TableName).Set(true, w).Where(NewConditional("id", "?", "=")).Execute()
 							args = append(args, reflect.ValueOf(w).Field(0).Interface())
 							return stmt, args, nil
 						}
